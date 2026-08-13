@@ -2,7 +2,7 @@
 
 Плагин для **[ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm)**, который через случайные интервалы оставляет короткий комментарий на стене профиля от одного бота другому — имитация того, что живые друзья изредка пишут друг другу на стене.
 
-Комментарии отправляются **только между ботами, которые уже в друзьях друг у друга** (например, через [RandomBotFriends](https://github.com/buddymurdock/ASF-RandomBotFriends)) — плагин никогда не пишет посторонним/реальным людям. Раз в случайный интервал `[MinDelayBetweenComments; MaxDelayBetweenComments]` секунд выбирается случайный залогиненный бот и случайный из его бот-друзей, на чью стену оставляется случайный комментарий из пула — тем же публичным HTTP-эндпоинтом (`steamcommunity.com/comment/Profile/post/...`), которым Steam-клиент сам публикует комментарии.
+Комментарии отправляются **только между ботами, которые уже в друзьях друг у друга** (например, через [RandomBotFriends](https://github.com/buddymurdock/ASF-RandomBotFriends)) — плагин никогда не пишет посторонним/реальным людям. Раз в случайный интервал `[MinDelayBetweenComments; MaxDelayBetweenComments]` секунд плагин делает попытку — но реально постит комментарий только с вероятностью `CommentChancePercent`, иначе просто пропускает эту попытку и ждёт заново. Это отдельный уровень рандомизации поверх и без того случайного интервала: гарантированное срабатывание на каждый тик (пусть и в случайное время) — тоже угадываемый паттерн. Если попытка прошла — выбирается случайный залогиненный бот и случайный из его бот-друзей, на чью стену оставляется случайный комментарий из пула — тем же публичным HTTP-эндпоинтом (`steamcommunity.com/comment/Profile/post/...`), которым Steam-клиент сам публикует комментарии.
 
 ## Источник текста
 
@@ -22,6 +22,7 @@
 	"RandomBotCommentsEnabled": true,
 	"RandomBotCommentsMinDelayBetweenComments": 1800,
 	"RandomBotCommentsMaxDelayBetweenComments": 7200,
+	"RandomBotCommentsCommentChancePercent": 100,
 	"RandomBotCommentsUseBundledComments": true,
 	"RandomBotCommentsComments": []
 }
@@ -30,8 +31,9 @@
 | Свойство | Тип | По умолчанию | Описание |
 | --- | --- | --- | --- |
 | `RandomBotCommentsEnabled` | `bool` | `false` | Включает/выключает плагин. |
-| `RandomBotCommentsMinDelayBetweenComments` | `uint`, секунды | `1800` | Нижняя граница случайной паузы между комментариями. |
-| `RandomBotCommentsMaxDelayBetweenComments` | `uint`, секунды | `7200` | Верхняя граница случайной паузы между комментариями. |
+| `RandomBotCommentsMinDelayBetweenComments` | `uint`, секунды | `1800` | Нижняя граница случайной паузы между попытками. |
+| `RandomBotCommentsMaxDelayBetweenComments` | `uint`, секунды | `7200` | Верхняя граница случайной паузы между попытками. |
+| `RandomBotCommentsCommentChancePercent` | `byte`, 1–100 | `100` | Шанс, что попытка реально закончится постом комментария (иначе тик просто пропускается). |
 | `RandomBotCommentsUseBundledComments` | `bool` | `false` | Добавлять ли в пул кандидатов фразы из встроенного списка (см. выше). |
 | `RandomBotCommentsComments` | `string[]` | `[]` | Свой список фраз (до 255 символов, лимит Steam), добавляется к бандлу (если он включён) или используется как единственный источник (если бандл выключен). |
 

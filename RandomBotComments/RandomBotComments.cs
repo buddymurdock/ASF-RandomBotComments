@@ -18,6 +18,7 @@ namespace RandomBotComments;
 #pragma warning disable CA5394 // Randomness here only picks an arbitrary bot/comment/delay, it's not used for anything security-sensitive
 [UsedImplicitly]
 internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
+	private const byte DefaultCommentChancePercent = 100;
 	private const uint DefaultMaxDelayBetweenCommentsInSeconds = 7200;
 	private const uint DefaultMinDelayBetweenCommentsInSeconds = 1800;
 	private const byte MaxCommentLength = 255; // Steam's profile comment length limit
@@ -147,6 +148,7 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 	];
 
 	private CancellationTokenSource? BackgroundLoopCts;
+	private byte CommentChancePercent = DefaultCommentChancePercent;
 	private HashSet<string> CommentPool = [];
 	private bool Enabled;
 	private uint MaxDelayBetweenCommentsInSeconds = DefaultMaxDelayBetweenCommentsInSeconds;
@@ -158,7 +160,8 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 	public Version Version => typeof(RandomBotComments).Assembly.GetName().Version ?? throw new InvalidOperationException(nameof(Version));
 
 	// Reads RandomBotCommentsEnabled / RandomBotCommentsMinDelayBetweenComments / RandomBotCommentsMaxDelayBetweenComments /
-	// RandomBotCommentsComments / RandomBotCommentsUseBundledComments from the global ASF.json config
+	// RandomBotCommentsCommentChancePercent / RandomBotCommentsComments / RandomBotCommentsUseBundledComments
+	// from the global ASF.json config
 	public Task OnASFInit(IReadOnlyDictionary<string, JsonElement>? additionalConfigProperties = null) {
 		HashSet<string> parsedComments = [];
 
@@ -175,6 +178,10 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 						break;
 					case $"{nameof(RandomBotComments)}MaxDelayBetweenComments" when (configValue.ValueKind == JsonValueKind.Number) && configValue.TryGetUInt32(out uint maxDelay) && (maxDelay > 0):
 						MaxDelayBetweenCommentsInSeconds = maxDelay;
+
+						break;
+					case $"{nameof(RandomBotComments)}CommentChancePercent" when (configValue.ValueKind == JsonValueKind.Number) && configValue.TryGetByte(out byte chancePercent) && (chancePercent > 0) && (chancePercent <= 100):
+						CommentChancePercent = chancePercent;
 
 						break;
 					case $"{nameof(RandomBotComments)}UseBundledComments" when configValue.ValueKind is JsonValueKind.True or JsonValueKind.False:
@@ -219,7 +226,7 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 			return Task.CompletedTask;
 		}
 
-		ASF.ArchiLogger.LogGenericInfo($"{Name} is enabled, {MinDelayBetweenCommentsInSeconds}-{MaxDelayBetweenCommentsInSeconds}s between comments, picking from {CommentPool.Count} candidate(s), only between bots that are already friends with each other.");
+		ASF.ArchiLogger.LogGenericInfo($"{Name} is enabled, {MinDelayBetweenCommentsInSeconds}-{MaxDelayBetweenCommentsInSeconds}s between comment attempts (each with a {CommentChancePercent}% chance of actually posting), picking from {CommentPool.Count} candidate(s), only between bots that are already friends with each other.");
 
 		if (BackgroundLoopCts != null) {
 			// OnASFInit() should only ever be called once per process, this is just a safety net against a possible double start
@@ -240,7 +247,9 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 	}
 
 	// Delay is re-rolled every tick within [MinDelayBetweenCommentsInSeconds; MaxDelayBetweenCommentsInSeconds] instead of a
-	// fixed-period timer - a perfectly metronomic tick interval running around the clock is itself a machine-detectable pattern
+	// fixed-period timer - a perfectly metronomic tick interval running around the clock is itself a machine-detectable pattern.
+	// On top of that, reaching the end of the delay doesn't guarantee a comment gets posted - CommentChancePercent gates each
+	// attempt, so even the (already randomized) cadence of successful posts isn't a reliable "fires every time" pattern either.
 	private async Task BackgroundLoopAsync(CancellationToken cancellationToken) {
 		while (!cancellationToken.IsCancellationRequested) {
 			uint delaySeconds = MinDelayBetweenCommentsInSeconds == MaxDelayBetweenCommentsInSeconds ? MinDelayBetweenCommentsInSeconds : (uint) Random.Shared.Next((int) MinDelayBetweenCommentsInSeconds, (int) MaxDelayBetweenCommentsInSeconds + 1);
@@ -249,6 +258,10 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 				await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken).ConfigureAwait(false);
 			} catch (OperationCanceledException) {
 				break;
+			}
+
+			if (Random.Shared.Next(100) >= CommentChancePercent) {
+				continue;
 			}
 
 			try {
