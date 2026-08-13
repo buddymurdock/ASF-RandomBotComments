@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using ArchiSteamFarm.Core;
 using ArchiSteamFarm.Plugins.Interfaces;
 using ArchiSteamFarm.Steam;
+using ArchiSteamFarm.Steam.Data;
 using JetBrains.Annotations;
 using SteamKit2;
 
@@ -19,6 +20,7 @@ namespace RandomBotComments;
 [UsedImplicitly]
 internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 	private const byte DefaultCommentChancePercent = 100;
+	private const byte DefaultEmoticonChancePercent = 0;
 	private const uint DefaultMaxDelayBetweenCommentsInSeconds = 7200;
 	private const uint DefaultMinDelayBetweenCommentsInSeconds = 1800;
 	private const byte MaxCommentLength = 255; // Steam's profile comment length limit
@@ -151,6 +153,7 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 	private byte CommentChancePercent = DefaultCommentChancePercent;
 	private HashSet<string> CommentPool = [];
 	private bool Enabled;
+	private byte EmoticonChancePercent = DefaultEmoticonChancePercent;
 	private uint MaxDelayBetweenCommentsInSeconds = DefaultMaxDelayBetweenCommentsInSeconds;
 	private uint MinDelayBetweenCommentsInSeconds = DefaultMinDelayBetweenCommentsInSeconds;
 	private bool UseBundledComments;
@@ -160,7 +163,8 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 	public Version Version => typeof(RandomBotComments).Assembly.GetName().Version ?? throw new InvalidOperationException(nameof(Version));
 
 	// Reads RandomBotCommentsEnabled / RandomBotCommentsMinDelayBetweenComments / RandomBotCommentsMaxDelayBetweenComments /
-	// RandomBotCommentsCommentChancePercent / RandomBotCommentsComments / RandomBotCommentsUseBundledComments
+	// RandomBotCommentsCommentChancePercent / RandomBotCommentsEmoticonChancePercent / RandomBotCommentsComments /
+	// RandomBotCommentsUseBundledComments
 	// from the global ASF.json config
 	public Task OnASFInit(IReadOnlyDictionary<string, JsonElement>? additionalConfigProperties = null) {
 		HashSet<string> parsedComments = [];
@@ -182,6 +186,10 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 						break;
 					case $"{nameof(RandomBotComments)}CommentChancePercent" when (configValue.ValueKind == JsonValueKind.Number) && configValue.TryGetByte(out byte chancePercent) && (chancePercent > 0) && (chancePercent <= 100):
 						CommentChancePercent = chancePercent;
+
+						break;
+					case $"{nameof(RandomBotComments)}EmoticonChancePercent" when (configValue.ValueKind == JsonValueKind.Number) && configValue.TryGetByte(out byte emoticonChancePercent) && (emoticonChancePercent <= 100):
+						EmoticonChancePercent = emoticonChancePercent;
 
 						break;
 					case $"{nameof(RandomBotComments)}UseBundledComments" when configValue.ValueKind is JsonValueKind.True or JsonValueKind.False:
@@ -226,7 +234,7 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 			return Task.CompletedTask;
 		}
 
-		ASF.ArchiLogger.LogGenericInfo($"{Name} is enabled, {MinDelayBetweenCommentsInSeconds}-{MaxDelayBetweenCommentsInSeconds}s between comment attempts (each with a {CommentChancePercent}% chance of actually posting), picking from {CommentPool.Count} candidate(s), only between bots that are already friends with each other.");
+		ASF.ArchiLogger.LogGenericInfo($"{Name} is enabled, {MinDelayBetweenCommentsInSeconds}-{MaxDelayBetweenCommentsInSeconds}s between comment attempts (each with a {CommentChancePercent}% chance of actually posting, and a {EmoticonChancePercent}% chance of appending a real owned emoticon), picking from {CommentPool.Count} candidate(s), only between bots that are already friends with each other.");
 
 		if (BackgroundLoopCts != null) {
 			// OnASFInit() should only ever be called once per process, this is just a safety net against a possible double start
@@ -296,6 +304,18 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 			Bot receiver = friendBots[Random.Shared.Next(friendBots.Count)];
 			string comment = CommentPool.ElementAt(Random.Shared.Next(CommentPool.Count));
 
+			if ((EmoticonChancePercent > 0) && (Random.Shared.Next(100) < EmoticonChancePercent)) {
+				string? emoticon = await TryGetRandomOwnedEmoticonAsync(sender).ConfigureAwait(false);
+
+				if (emoticon != null) {
+					string withEmoticon = $"{comment} {emoticon}";
+
+					if (withEmoticon.Length <= MaxCommentLength) {
+						comment = withEmoticon;
+					}
+				}
+			}
+
 			bool success = await PostCommentAsync(sender, receiver.SteamID, comment).ConfigureAwait(false);
 
 			if (success) {
@@ -306,6 +326,21 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 
 			return;
 		}
+	}
+
+	// Picks a random emoticon the bot actually owns (from real inventory, appID 753) - never a made-up or
+	// scraped code, only ones Steam itself confirms this specific bot has unlocked (e.g. from crafting badges).
+	// An owned emoticon's chat code is literally its inventory item name (e.g. ":Blisk:"), no separate lookup needed.
+	private static async Task<string?> TryGetRandomOwnedEmoticonAsync(Bot bot) {
+		List<string> emoticonCodes = [];
+
+		await foreach (Asset asset in bot.ArchiWebHandler.GetInventoryAsync(appID: Asset.SteamAppID, contextID: Asset.SteamCommunityContextID).ConfigureAwait(false)) {
+			if ((asset.Type == EAssetType.Emoticon) && !string.IsNullOrEmpty(asset.Description?.Name)) {
+				emoticonCodes.Add(asset.Description.Name);
+			}
+		}
+
+		return emoticonCodes.Count > 0 ? emoticonCodes[Random.Shared.Next(emoticonCodes.Count)] : null;
 	}
 
 	private static async Task<bool> PostCommentAsync(Bot bot, ulong receiverSteamID, string comment) {
