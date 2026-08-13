@@ -35,6 +35,62 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 		"🙌", "keep grinding", "nice", "hey", "sup", "yo", "🎉", "congrats", "well played", "👌"
 	];
 
+	// Same self-authored principle as BundledComments above, but templated on Steam's own +rep/-rep
+	// trading-reputation culture (leaving a short verdict on a trader's wall after a deal) - the -rep
+	// entries are deliberately light, friendly ribbing between people who already trust each other
+	// (e.g. "-rep too generous lol"), never a genuine accusation or insult.
+	private static readonly string[] BundledTradeComments = [
+		"+rep 5 stars", "+rep always a pleasure", "+rep always delivers", "+rep appreciate the deal",
+		"+rep awesome buyer", "+rep awesome deal", "+rep awesome player", "+rep awesome seller", "+rep awesome trade",
+		"+rep chill buyer", "+rep chill deal", "+rep chill partner", "+rep chill player", "+rep chill seller",
+		"+rep chill trade", "+rep cool partner", "+rep cool player", "+rep cool trader", "+rep easy buyer",
+		"+rep easy deal", "+rep easy partner", "+rep easy player", "+rep easy trade", "+rep easy trader",
+		"+rep efficient buyer", "+rep efficient deal", "+rep efficient partner", "+rep efficient player",
+		"+rep efficient seller", "+rep efficient trade", "+rep efficient trader", "+rep excellent buyer",
+		"+rep excellent deal", "+rep excellent partner", "+rep excellent player", "+rep excellent seller",
+		"+rep excellent trade", "+rep excellent trader", "+rep fair trade", "+rep fast and easy trade",
+		"+rep fast buyer", "+rep fast deal", "+rep fast seller", "+rep fast trade", "+rep fast trader",
+		"+rep friendly player", "+rep friendly seller", "+rep friendly trade", "+rep friendly trader",
+		"+rep generous deal", "+rep generous partner", "+rep generous seller", "+rep generous trade",
+		"+rep generous trader", "+rep genuine buyer", "+rep genuine deal", "+rep genuine partner",
+		"+rep genuine player", "+rep genuine seller", "+rep genuine trade", "+rep genuine trader", "+rep great buyer",
+		"+rep great experience overall", "+rep great partner", "+rep great player", "+rep great seller",
+		"+rep great trade", "+rep great trader", "+rep great trading with you", "+rep helpful buyer",
+		"+rep helpful deal", "+rep helpful partner", "+rep helpful player", "+rep helpful seller", "+rep honest player",
+		"+rep honest seller", "+rep honest trade", "+rep legit buyer", "+rep legit deal", "+rep legit partner",
+		"+rep legit seller", "+rep legit trade", "+rep legit trader", "+rep nice player", "+rep nice seller",
+		"+rep nice trade", "+rep no issues at all", "+rep patient buyer", "+rep patient deal", "+rep patient partner",
+		"+rep patient player", "+rep patient seller", "+rep patient trade", "+rep patient trader", "+rep polite buyer",
+		"+rep polite deal", "+rep polite seller", "+rep polite trade", "+rep polite trader", "+rep professional buyer",
+		"+rep professional deal", "+rep professional partner", "+rep professional player", "+rep professional seller",
+		"+rep professional trade", "+rep professional trader", "+rep quick and painless", "+rep quick buyer",
+		"+rep quick partner", "+rep quick player", "+rep quick response", "+rep quick seller", "+rep quick trade",
+		"+rep quick trader", "+rep reliable buyer", "+rep reliable partner", "+rep reliable seller",
+		"+rep reliable trade", "+rep reliable trader", "+rep respectful buyer", "+rep respectful player",
+		"+rep respectful seller", "+rep respectful trade", "+rep respectful trader", "+rep smooth buyer",
+		"+rep smooth deal", "+rep smooth partner", "+rep smooth player", "+rep smooth trade", "+rep smooth trader",
+		"+rep smooth transaction", "+rep solid buyer", "+rep solid deal", "+rep solid player", "+rep solid trade",
+		"+rep solid trader", "+rep thanks for the cards", "+rep thanks for the gift", "+rep top buyer", "+rep top deal",
+		"+rep top partner", "+rep top seller", "+rep top trade", "+rep top trader", "+rep trusted trader",
+		"+rep trustworthy deal", "+rep trustworthy player", "+rep trustworthy seller", "+rep trustworthy trade",
+		"+rep trustworthy trader", "+rep very patient", "+rep would recommend", "+rep would trade again",
+		"+rep, 5 stars", "+rep, always a pleasure", "+rep, always delivers", "+rep, fair trade",
+		"+rep, fast and easy trade", "+rep, great communication", "+rep, great experience overall",
+		"+rep, no complaints", "+rep, no issues at all", "+rep, quick and painless", "+rep, quick response",
+		"+rep, smooth transaction", "+rep, super easy deal", "+rep, thanks for the cards", "+rep, thanks for the gift",
+		"+rep, thanks for the trade", "+rep, top notch trader", "+rep, trusted trader", "+rep, very patient",
+		"+rep, would recommend", "-rep for beating me at cards", "-rep for being better than me at everything",
+		"-rep for having too much drip", "-rep for out-trading me", "-rep for the trade offer spam (jk love you)",
+		"-rep for the unfair advantage (jk)", "-rep for winning the giveaway", "-rep gave me a great deal, suspicious",
+		"-rep hoarding all the good cards", "-rep jk, love ya", "-rep sneaky good trader ngl",
+		"-rep too chill, makes the rest of us look bad", "-rep too generous lol", "-rep too good at this game",
+		"-rep too lucky with drops", "-rep, for having a better inventory than me", "-rep, for having too much drip",
+		"-rep, for making me look bad", "-rep, for out-trading me", "-rep, for the sniped item (all in good fun)",
+		"-rep, for the trade offer spam (jk love you)", "-rep, jk, love ya", "-rep, stole the good cards (jk)",
+		"-rep, too chill, makes the rest of us look bad", "-rep, too generous lol", "-rep, too good at this game",
+		"-rep, too lucky with drops"
+	];
+
 	private CancellationTokenSource? BackgroundLoopCts;
 	private HashSet<string> CommentPool = [];
 	private bool Enabled;
@@ -80,6 +136,10 @@ internal sealed class RandomBotComments : IASF, IGitHubPluginUpdates {
 
 		if (UseBundledComments) {
 			foreach (string comment in BundledComments) {
+				parsedComments.Add(comment);
+			}
+
+			foreach (string comment in BundledTradeComments) {
 				parsedComments.Add(comment);
 			}
 		}
